@@ -15,20 +15,20 @@ generated actions, no paid-model fallback. UTC-day budget 8,000 neurons, 24 step
 
 ## Tasks
 
-- [ ] Budget and configuration (`config.py`, `budget.py`, `tests/test_budget.py`):
+- [x] Budget and configuration (`config.py`, `budget.py`, `tests/test_budget.py`):
   write failing tests for reservation persistence, concurrency, rollover, quota failure,
   and usage exceeding reservations; implement transactional SQLite accounting.
-- [ ] Clef adapter (`clef.py`, `tests/test_clef.py`): failing tests pin native choice/noul
+- [x] Clef adapter (`clef.py`, `tests/test_clef.py`): failing tests pin native choice/noul
   envelopes, model selectors, strict probability validation, retry limits, auth/quota
   handling, oversized requests, and reservation-before-network ordering; implement httpx adapter.
-- [ ] Safari (`safari.py`, `actions.py`, `tests/test_actions.py`, `tests/test_safari.py`):
+- [x] Safari (`safari.py`, `actions.py`, `tests/test_actions.py`, `tests/test_safari.py`):
   test native textTree UIDs, input candidates, stale state, unsupported schemes,
   credential fields, MCP payloads; use official SDK with bounded waits and own extraction files.
-- [ ] Loop and interfaces (`runner.py`, `cli.py`, `server.py`, `tests/test_runner.py`):
+- [x] Loop and interfaces (`runner.py`, `cli.py`, `server.py`, `tests/test_runner.py`):
   test successful multi-page evidence, low confidence, escalation, stale observations,
   action failures, false completion, repeated no-progress, and maximum steps. Implement
   CLI JSON output and stdio MCP tools over the same runner.
-- [ ] Handoff and verification: README, AGENTS.md, agent prompt, architecture, sources,
+- [x] Handoff and verification: README, AGENTS.md, agent prompt, architecture, sources,
   configuration example, local fixture, CI and license. Run offline suite, lint, types,
   build, secret scan, and real Safari fixture. Create private GitHub repository and push.
 
