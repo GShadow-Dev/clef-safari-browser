@@ -57,7 +57,7 @@ async def test_mcp_server_exposes_shared_browse_and_usage_tools(tmp_path):
 
     server = create_server(Settings(state_dir=tmp_path))
     tools = await server.list_tools()
-    assert {tool.name for tool in tools} == {"browse", "usage"}
+    assert {"browse", "usage", "account_usage"} <= {tool.name for tool in tools}
     assert "goal" in next(tool for tool in tools if tool.name == "browse").inputSchema["properties"]
 
 

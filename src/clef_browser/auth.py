@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import fcntl
 import time
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -65,9 +66,20 @@ class OAuthAuth:
             return record.access_token
 
 
-async def client_for(settings: Settings, budget: Budget) -> ClefClient:
+@dataclass(frozen=True)
+class Credentials:
+    account_id: str
+    get_token: Callable[[], Awaitable[str]] = field(repr=False)
+
+
+def credentials_for(settings: Settings) -> Credentials:
+    """Resolve the same account and refresh provider for inference and analytics."""
     if settings.token:
-        return ClefClient(settings.account_id, settings.token, budget)
+
+        async def configured_token() -> str:
+            return settings.token
+
+        return Credentials(settings.account_id, configured_token)
     store = KeychainStore(settings.state_dir)
     record = store.load()
     if record is None:
@@ -78,8 +90,13 @@ async def client_for(settings: Settings, budget: Budget) -> ClefClient:
     auth = OAuthAuth(
         settings.state_dir, store, account_id=settings.account_id or record.config.account_id
     )
-    token = await auth.token()
-    return ClefClient(record.config.account_id, token, budget, get_token=auth.token)
+    return Credentials(record.config.account_id, auth.token)
+
+
+async def client_for(settings: Settings, budget: Budget) -> ClefClient:
+    credentials = credentials_for(settings)
+    token = await credentials.get_token()
+    return ClefClient(credentials.account_id, token, budget, get_token=credentials.get_token)
 
 
 def auth_status(settings: Settings) -> dict[str, Any]:

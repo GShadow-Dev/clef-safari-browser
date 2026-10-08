@@ -10,6 +10,10 @@ owns one state-directory-scoped macOS Keychain item. `auth.py` links/revokes acc
 and resolves credentials for both CLI and MCP, refreshing before inference attempts.
 Explicit API tokens take precedence. OAuth failures stop without executing a browser
 action; login/logout never clear the daily budget.
+`credits.py` shares the credential provider and reads an ungrouped GraphQL Workers
+AI neuron aggregate for the current UTC day. CLI `credits` and MCP `account_usage`
+combine that account-wide estimate with the separate local ledger, without inference.
+Permission failures and malformed/partial results return an unavailable account balance.
 
 The caller supplies a goal, HTTP(S) start URL and up to four exact input texts.
 Runner opens a new automation tab, captures the visible viewport's native textTree into its own temporary
@@ -47,5 +51,5 @@ do not contain generated prose answers. The caller can use a separate agent to
 summarize the evidence, without changing which model decided the browser actions.
 
 The local database is not an account-wide quota meter. Keep all clients on the same
-state directory, monitor the account dashboard, and use Workers Free if charges
+state directory, check account totals with `credits` or the dashboard, and use Workers Free if charges
 must be impossible. Remote services and dynamic websites remain fallible.

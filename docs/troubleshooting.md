@@ -6,6 +6,8 @@
 | Safari driver is missing or too old | Install Safari 27+; check /usr/bin/safaridriver --version. |
 | Another session is running | Finish the other Clef run. Use the same state directory. Do not kill unrelated processes. |
 | Credentials are missing | Follow docs/oauth.md and run login; then doctor --cloudflare. The scoped API-token alternative is in README.md. |
+| credits reports analytics access denied | Add Account Analytics Read (`account-analytics.read`) to the client and local scope list, then relink. API tokens need Account Analytics Read on the same account. See credits.md. |
+| credits reports unavailable or delayed totals | Keep the local budget; account balance is unknown or estimated. Retry later or check the dashboard. Never clear the ledger. |
 | OAuth client form Continue is disabled | Press Return to add the callback URL to its list, and choose Code, Authorization Code/Refresh Token, and None (PKCE). |
 | OAuth callback port busy or timeout | Close the other login, retry, and use the exact registered callback URL. Sign in and consent in ordinary Safari. |
 | Keychain unavailable | Unlock your login keychain and allow this app's access. Never paste the saved credential into chat. |

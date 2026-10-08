@@ -108,6 +108,7 @@ uv run clef-browser run --url https://developers.cloudflare.com/workers-ai/ \
   --goal "Open the pricing page" --model clef --max-steps 12
 
 uv run clef-browser budget
+uv run clef-browser credits
 ```
 
 Runs print JSON with `status`, `visited_urls`, `pages` (up to six page extracts),
@@ -159,6 +160,8 @@ For Claude Code, substitute `claude` for `codex`. The server exposes:
 
 - `browse(goal, url, texts?, max_steps?)`: the complete Clef → native Safari loop.
 - `usage()`: local daily budget usage without inference.
+- `account_usage()`: Cloudflare's account-wide neuron estimate plus the local budget,
+  without inference. Requires Account Analytics Read; see [docs/credits.md](docs/credits.md).
 
 Call `browse` with a precise goal and input texts. This lets an agent delegate
 browser decisions to Clef; registering Apple's Safari MCP alone would leave those
@@ -188,6 +191,14 @@ The ledger measures **this application on one Mac**, not other apps or devices.
 Leave `CLEF_STATE_DIR` consistent across clients and repository copies. Changing or
 deleting it discards the application's accounting. The default is
 `~/Library/Application Support/clef-safari-browser/usage.sqlite3`.
+
+Check **`uv run clef-browser credits`** before and after tasks to see account neurons
+used, estimated remaining free neurons, percentage used and the next UTC reset,
+alongside local reservations. It reads Cloudflare's Analytics API and consumes no
+neurons. Add Account Analytics Read to your OAuth client and relink once, following
+[docs/credits.md](docs/credits.md). Analytics can lag or use sampling, so the estimate
+does not replace Workers Free or the local reservation limit. Errors return an unknown
+account balance rather than claiming the full free allowance remains.
 
 Use Workers Free as the actual spending boundary. On a paid account, unrelated
 usage can exhaust the shared allocation and cause charges despite this app's local

@@ -16,11 +16,13 @@ In your Cloudflare account, open **Manage account → OAuth clients → Create c
 | Grant types | Authorization Code and Refresh Token |
 | Token authentication method | None (PKCE) |
 | Redirect URL | `http://127.0.0.1:8766/oauth/callback` |
-| Permissions | Workers AI Read and Write (the selection screen labels Write as Edit) |
+| Permissions | Workers AI Read and Write (Edit in selection), plus Account Analytics Read for credit tracking |
 | Visibility | Private for your account's members |
 
 **Press Return after entering the redirect URL** to add it to the URL list.
-All required Workers AI permissions should remain required. Do not select unrelated
+All required Workers AI permissions should remain required. Account Analytics Read
+enables account-wide neuron tracking and permits reading other account analytics;
+the app only queries Workers AI usage. See [credits.md](credits.md). Do not select unrelated
 account, DNS, Worker deployment or billing permissions. Refresh requires the
 `offline_access` identity scope; the login command requests it automatically. If
 your registration lets you edit identity scopes, include it there too.
@@ -36,15 +38,16 @@ Set the non-secret registration information in `.env`:
 ```dotenv
 CLOUDFLARE_ACCOUNT_ID=your-32-character-account-id
 CLOUDFLARE_OAUTH_CLIENT_ID=your-public-client-id
-CLOUDFLARE_OAUTH_SCOPES=ai.read ai.write
+CLOUDFLARE_OAUTH_SCOPES=ai.read ai.write account-analytics.read
 ```
 
 Leave `CLOUDFLARE_AUTH_TOKEN` unset or blank for OAuth. An explicitly configured
-API token takes precedence for `run`, `serve`, `doctor` and `auth-status`.
+API token takes precedence for `run`, `serve`, `doctor`, `credits` and `auth-status`.
 
 ```sh
 uv run clef-browser login
 uv run clef-browser auth-status
+uv run clef-browser credits
 uv run clef-browser doctor --cloudflare
 ```
 
@@ -52,6 +55,8 @@ Select the **same account ID** on Cloudflare's consent screen. This version requ
 an explicit account ID so it does not request account-list access. `auth-status`
 reports a saved connection; only `doctor --cloudflare` verifies Workers AI inference.
 The probe uses the existing budget. Login and refresh do not call an AI model.
+The `credits` check also makes no inference. Existing clients with only Workers AI
+permissions can keep browsing; add Account Analytics Read and relink for usage totals.
 
 The CLI also accepts `login --client-id ... --account-id ... --scope ... --scope ...`.
 Use `--port` only with an identically registered callback URL. A busy callback port

@@ -66,3 +66,23 @@ spending boundary and monitor the account dashboard.
 Tests establish working OAuth and native browsing on this Mac, not general browser
 benchmark reliability or an account-wide spending guarantee. The ledger remains
 conservative and includes probes, failed/uncertain inference and full-Clef escalation.
+
+## Account neuron tracking — October 8, 2026
+
+- 88 offline tests passed; two opt-in native tests skipped. The 23 added cases cover
+  account selection, UTC boundaries, full-account aggregation, exhausted allowance,
+  safe authorization/transport errors, invalid/missing/partial data, and actual
+  CLI/MCP reports that leave existing reservations unchanged.
+- Live GraphQL schema introspection confirmed `aiInferenceAdaptiveGroups` and
+  `sum.totalNeurons`, including the required non-null filter argument. A regression
+  rejects the invalid nullable query before accepting its corrected form.
+- Cloudflare's authenticated scope catalog confirmed `account-analytics.read`.
+  The existing Workers AI-only OAuth connection returned `authz`. The live `credits`
+  command reported `unavailable`, preserved the ledger and did not present a balance.
+- Ruff lint/format, Linux and Darwin Mypy, source/wheel builds and staged/history
+  Gitleaks checks passed. Independent review caught the filter declaration, which
+  was corrected; no further material defect was identified.
+
+Successful live account totals remain **pending Account Analytics Read permission
+and new OAuth consent**. Offline fixtures verify report behavior, not actual billing
+accuracy. No model inference or native browser action is needed for a credit check.

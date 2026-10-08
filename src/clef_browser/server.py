@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from .budget import Budget, BudgetExceeded
 from .clef import ClefError
 from .config import Settings
+from .credits import credits_report
 from .oauth import OAuthError
 from .runner import Task, browse_task
 from .safari import SafariError
@@ -42,5 +43,10 @@ def create_server(settings: Settings) -> FastMCP:
     def usage() -> dict[str, Any]:
         """Read local UTC-day reserved neurons. Other account usage is not reflected here."""
         return Budget(settings.state_dir / "usage.sqlite3", settings.daily_neurons).usage()
+
+    @server.tool()
+    async def account_usage() -> dict[str, Any]:
+        """Check Cloudflare's account-wide neuron estimate and local budget. No inference."""
+        return await credits_report(settings)
 
     return server

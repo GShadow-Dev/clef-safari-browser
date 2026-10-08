@@ -14,6 +14,7 @@ from .auth import auth_status, client_for, login, logout
 from .budget import RATES, Budget, BudgetExceeded
 from .clef import ClefError
 from .config import Settings
+from .credits import credits_report
 from .oauth import OAuthConfig, OAuthError
 from .runner import Task, browse_task
 from .safari import Safari, SafariError
@@ -105,7 +106,8 @@ def parser() -> argparse.ArgumentParser:
         "--cloudflare", action="store_true", help="Make one small budgeted live Clef inference."
     )
     commands.add_parser("budget", help="Show local allocation usage without network access.")
-    commands.add_parser("serve", help="Expose browse and usage tools over stdio MCP.")
+    commands.add_parser("credits", help="Check account-wide Cloudflare neurons and local budget.")
+    commands.add_parser("serve", help="Expose browsing and usage tools over stdio MCP.")
     auth = commands.add_parser(
         "login", help="Link a Cloudflare account using Safari and OAuth PKCE."
     )
@@ -157,6 +159,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "budget":
             emit(Budget(settings.state_dir / "usage.sqlite3", settings.daily_neurons).usage())
             return 0
+        if args.command == "credits":
+            report = asyncio.run(credits_report(settings))
+            emit(report)
+            return 0 if report["status"] == "ready" else 1
         if args.command == "doctor":
             emit(asyncio.run(doctor(settings, args.url, args.cloudflare)))
             return 0

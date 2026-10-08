@@ -16,7 +16,8 @@ MCP operates an automation window inside native Safari, with no promise of my ex
 personal tabs, AutoFill or login sessions. Let me handle login, MFA and CAPTCHA.
 
 Link Cloudflare using OAuth: follow docs/oauth.md to register a private PKCE client
-with only Workers AI Read/Write permissions and refresh tokens. Configure its public
+with Workers AI Read/Write, Account Analytics Read for neuron tracking, and refresh
+tokens. Explain the analytics read permission and let me approve it. Configure its public
 Client ID, exact scope IDs and account ID, then run clef-browser login. Let me handle
 sign-in and consent in Safari. Tokens remain in this app's Keychain item; never
 inspect unrelated credential stores, ask for tokens in chat or expose them in output.
@@ -24,9 +25,12 @@ The scoped API-token setup in README.md remains available for unattended environ
 Keep Workers Free as
 the spending boundary and leave the shared persistent ledger intact.
 
-Run uv run clef-browser doctor, check uv run clef-browser budget, then verify native
+Run uv run clef-browser doctor, check uv run clef-browser budget and credits, then verify native
 navigation with doctor --url https://example.com. When credentials exist, run doctor
 --cloudflare and the local fixture demo from README.md. Report what was actually tested.
+Use credits (or MCP account_usage) before and after tasks. Its account totals include
+other apps and may lag or use sampling; an unavailable balance is unknown. See
+docs/credits.md. Never treat the local ledger as account-wide remaining credits.
 
 For my browsing task, call uv run clef-browser run with --goal, --url, and explicit
 --query/--text values, or register the documented stdio MCP configuration and call

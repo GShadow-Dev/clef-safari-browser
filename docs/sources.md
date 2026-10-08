@@ -29,6 +29,15 @@ Checked October 7, 2026. Review these on dependency, API or pricing changes.
 
 ## Direct native observations
 
+Account tracking checked October 8, 2026:
+[GraphQL token permissions](https://developers.cloudflare.com/analytics/graphql-api/getting-started/authentication/api-token-auth/),
+[introspection](https://developers.cloudflare.com/analytics/graphql-api/features/discovery/introspection/),
+and [sampling](https://developers.cloudflare.com/analytics/graphql-api/sampling/).
+Live introspection confirmed `AccountAiInferenceAdaptiveGroupsSum.totalNeurons`.
+The authenticated OAuth scope catalog confirmed Account Analytics Read is
+`account-analytics.read`; Workers AI scopes alone returned `authz` for this dataset.
+See credits.md for the exact query and limits of the estimate.
+
 The installed Safari 27.0 server's `tools/list` and actual page reads were inspected.
 `get_page_content` emits native `link/input/button uid=N` textTree records. A `savePath`
 request saves a JSON extraction but returns a plain-text acknowledgment. On this
