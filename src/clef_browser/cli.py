@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from dataclasses import replace
 from typing import Any
@@ -21,13 +22,49 @@ from .safari import Safari, SafariError
 from .session import BrowserSession
 
 
+async def write_session_result(result: dict[str, Any]) -> None:
+    """Drain complete JSON even when the shared terminal descriptor is nonblocking."""
+    data = memoryview(
+        (json.dumps(result, ensure_ascii=False, allow_nan=False) + "\n").encode(
+            sys.stdout.encoding or "utf-8"
+        )
+    )
+    descriptor = sys.stdout.fileno()
+    loop = asyncio.get_running_loop()
+    while data:
+        try:
+            written = os.write(descriptor, data)
+        except BlockingIOError:
+            ready: asyncio.Future[None] = loop.create_future()
+
+            def writable(future: asyncio.Future[None] = ready) -> None:
+                if not future.done():
+                    future.set_result(None)
+
+            loop.add_writer(descriptor, writable)
+            try:
+                await ready
+            finally:
+                loop.remove_writer(descriptor)
+            continue
+        if written == 0:
+            raise BrokenPipeError("Session output was closed.")
+        data = data[written:]
+
+
 async def interactive_session(settings: Settings) -> int:
     """Read one task JSON per line, retaining Safari until stdin closes."""
     reader = asyncio.StreamReader(limit=1048576)
+    # connect_read_pipe sets O_NONBLOCK. In a PTY stdin/stdout can share the same
+    # open-file description, so synchronous print may emit only part of a page.
+    output_blocking = os.get_blocking(sys.stdout.fileno())
     transport, _ = await asyncio.get_running_loop().connect_read_pipe(
         lambda: asyncio.StreamReaderProtocol(reader), sys.stdin.buffer
     )
     try:
+        # A separate stdout pipe also needs nonblocking writes for cancellable
+        # backpressure; it does not inherit stdin's descriptor flags.
+        os.set_blocking(sys.stdout.fileno(), False)
         async with BrowserSession(settings) as session:
             while line := await reader.readline():
                 try:
@@ -43,8 +80,9 @@ async def interactive_session(settings: Settings) -> int:
                     )
                 except (ValueError, KeyError, TypeError) as exc:
                     result = {"status": "error", "message": str(exc)}
-                print(json.dumps(result, ensure_ascii=False, allow_nan=False), flush=True)
+                await write_session_result(result)
     finally:
+        os.set_blocking(sys.stdout.fileno(), output_blocking)
         transport.close()
     return 0
 
@@ -214,7 +252,10 @@ def main(argv: list[str] | None = None) -> int:
         emit({"status": "error", "message": str(exc)})
         return 1
     except KeyboardInterrupt:
-        emit({"status": "cancelled", "message": "Stopped by the user."})
+        # Session output may contain a partial JSON record or a full buffer.
+        # Another synchronous record could corrupt the stream or block shutdown.
+        if args.command != "session":
+            emit({"status": "cancelled", "message": "Stopped by the user."})
         return 130
 
 

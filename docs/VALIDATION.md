@@ -119,3 +119,23 @@ The existing Suno login session was left open during development. Its already
 running worker cannot load new Python code without restarting; authenticated Suno
 creation and album-art uploads remain unverified. File pickers/uploads and slider
 values are still handoff boundaries. No Suno songs were created by these fixture tests.
+
+## Terminal output backpressure — October 8, 2026
+
+- A live helper crashed with `BlockingIOError` while printing a large native page.
+  Investigation reproduced the same defect in the CLI: asyncio's stdin transport
+  makes a shared PTY descriptor nonblocking, and synchronous JSON output truncates
+  when its terminal buffer fills.
+- A real PTY subprocess regression failed on the truncated result before the fix.
+  The CLI now drains partial writes asynchronously, waits for output readiness and
+  restores the original stdout blocking mode on shutdown. The regression verifies
+  a complete 168,000-character page and another task in the same session.
+- Real full-pipe and full-PTY cancellation tests also failed before correction.
+  Session stdout is explicitly nonblocking and Ctrl-C exits 130 without appending
+  a cancellation record to a potentially interrupted result.
+- 105 offline tests passed; three live Safari tests were skipped because the
+  persistent Suno worker still owned its connection. Ruff lint/format, Linux and
+  Darwin Mypy, source/wheel builds and history Gitleaks checks passed.
+- The replacement live worker transfers results through a private local socket and
+  remains open across the current Suno login handoff. This fixes the output crash;
+  authenticated Suno creation and cover uploads remain unverified.

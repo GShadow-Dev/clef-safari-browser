@@ -125,6 +125,9 @@ tab, then send `resume:true` with the same origin. The worker retains its connec
 and the adapter reselects only the task tab it created. Closing stdin, exiting the
 MCP client or restarting the worker ends that session; login is not persisted across
 process restarts. No cookies are exported. Check the returned evidence after each task.
+Session output handles slow pipe and terminal consumers without closing the browser.
+Ctrl-C exits with code 130 without adding another stdout record; consumers must discard
+an incomplete final JSON line. Any browser mutation already dispatched is not replayed.
 
 ```sh
 uv run clef-browser run --url https://www.wikipedia.org/ \

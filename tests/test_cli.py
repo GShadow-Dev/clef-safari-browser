@@ -129,3 +129,132 @@ def test_malformed_session_json_returns_errors_and_keeps_reading(tmp_path):
     outputs = [json.loads(line) for line in result.stdout.splitlines()]
     assert len(outputs) == 4
     assert all(output["status"] == "error" for output in outputs)
+
+
+@pytest.mark.skipif(__import__("sys").platform == "win32", reason="Native Safari uses POSIX")
+def test_large_tty_result_preserves_session_for_next_task(tmp_path):
+    """A full native page must not crash when stdin and stdout share a terminal."""
+    import os
+    import pty
+    import select
+    import subprocess
+    import sys
+    import termios
+    import time
+
+    master, slave = pty.openpty()
+    attributes = termios.tcgetattr(slave)
+    attributes[3] &= ~termios.ECHO
+    termios.tcsetattr(slave, termios.TCSANOW, attributes)
+    script = """
+import asyncio
+from pathlib import Path
+from clef_browser.cli import interactive_session
+from clef_browser.config import Settings
+from clef_browser.session import BrowserSession
+
+# Replace only the external browsing operation; exercise actual CLI I/O/lifecycle.
+async def page(self, task, **kwargs):
+    return {'status': 'needs_input', 'goal': task.goal, 'text': 'page evidence ' * 12000}
+BrowserSession.run = page
+asyncio.run(interactive_session(Settings(state_dir=Path('.'))))
+"""
+    child = subprocess.Popen(
+        [sys.executable, "-c", script],
+        cwd=tmp_path,
+        stdin=slave,
+        stdout=slave,
+        stderr=subprocess.PIPE,
+    )
+    os.close(slave)
+    buffered = bytearray()
+
+    def result():
+        deadline = time.monotonic() + 8
+        while b"\n" not in buffered and time.monotonic() < deadline:
+            readable, _, _ = select.select([master], [], [], 0.1)
+            if readable:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError:
+                    break
+                buffered.extend(chunk)
+            if child.poll() is not None:
+                break
+        assert b"\n" in buffered, "CLI lost its session before completing the page result"
+        line, _, remainder = buffered.partition(b"\n")
+        buffered[:] = remainder
+        return json.loads(line)
+
+    try:
+        os.write(master, b'{"goal":"first","url":"https://example.org"}\n')
+        # Let the result exceed the terminal buffer before the consumer starts draining it.
+        time.sleep(0.4)
+        first = result()
+        assert first["goal"] == "first"
+        assert len(first["text"]) == 168000
+        os.write(master, b'{"goal":"second","url":"https://example.org"}\n')
+        second = result()
+        assert second["goal"] == "second"
+        assert second["text"] == first["text"]
+        os.write(master, b'{"command":"exit"}\n')
+        assert child.wait(timeout=3) == 0
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.communicate(timeout=3)
+        os.close(master)
+
+
+@pytest.mark.skipif(__import__("sys").platform == "win32", reason="Native Safari uses POSIX")
+@pytest.mark.parametrize("terminal", [False, True], ids=["pipe", "pty"])
+def test_session_sigint_exits_with_full_output_buffer(tmp_path, terminal):
+    """A slow consumer cannot trap the session in output or its cancellation report."""
+    import os
+    import pty
+    import select
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    script = """
+import sys
+from clef_browser.cli import main
+from clef_browser.session import BrowserSession
+
+async def page(self, task, **kwargs):
+    print('READY', file=sys.stderr, flush=True)
+    return {'status': 'needs_input', 'text': 'page evidence ' * 12000}
+BrowserSession.run = page
+sys.exit(main(['session']))
+"""
+    master, slave = pty.openpty() if terminal else (None, None)
+    child = subprocess.Popen(
+        [sys.executable, "-c", script],
+        cwd=tmp_path,
+        stdin=slave if terminal else subprocess.PIPE,
+        stdout=slave if terminal else subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if slave is not None:
+        os.close(slave)
+    try:
+        task = b'{"goal":"first","url":"https://example.org"}\n'
+        if master is not None:
+            os.write(master, task)
+        else:
+            child.stdin.write(task)
+            child.stdin.flush()
+        readable, _, _ = select.select([child.stderr], [], [], 3)
+        assert readable and child.stderr.readline() == b"READY\n"
+        # Leave output undrained, then cancel while the result exceeds its buffer.
+        time.sleep(0.2)
+        child.send_signal(signal.SIGINT)
+        assert child.wait(timeout=3) == 130
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.communicate(timeout=3)
+        if master is not None:
+            os.close(master)
