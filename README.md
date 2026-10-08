@@ -95,10 +95,36 @@ uv run clef-browser run \
 ```
 
 `--query` and `--text` are aliases. Repeat up to four times to supply exact text
+of up to 10,000 characters each (including multiline lyrics)
 that Clef may choose to type. If omitted, the first 1,000 characters of the goal
 are the available search text. Clef selects a provided value; it cannot compose one.
-Typing replaces the field and presses Return, suitable for search forms. This
-version does not support arbitrary form workflows or menus with unlisted options.
+Typing replaces the field without submitting. Search fields also offer a separate
+type-and-Return choice. Clef can fill rich text editors, textareas and ordinary text
+inputs, click checkboxes/radios and visible menu items, select observed dropdown
+options, and scroll nested form containers. Submission is a separate click chosen
+by Clef. An active dialog takes priority over controls behind it.
+
+For tasks that need sign-in, use the persistent MCP server or `session` command.
+One-shot `run` closes its automation connection when it returns. Do not repeatedly
+use it across login handoffs.
+
+```sh
+uv run clef-browser session
+```
+
+Keep that process and its stdin open. Send one JSON task per line, for example:
+
+```json
+{"goal":"Open the create form; stop if login is required","url":"https://suno.com/create","max_steps":4}
+{"goal":"Fill Lyrics editor using text 0 and Styles using text 1. Do not click Create yet.","url":"https://suno.com/create","texts":["[Verse]\nMy exact lyrics","soul, male vocals"],"resume":true,"max_steps":12}
+{"command":"exit"}
+```
+
+When `needs_input` requires sign-in, let the person complete it in the automation
+tab, then send `resume:true` with the same origin. The worker retains its connection
+and the adapter reselects only the task tab it created. Closing stdin, exiting the
+MCP client or restarting the worker ends that session; login is not persisted across
+process restarts. No cookies are exported. Check the returned evidence after each task.
 
 ```sh
 uv run clef-browser run --url https://www.wikipedia.org/ \
@@ -158,7 +184,9 @@ codex mcp add clef-safari-browser -- uv \
 
 For Claude Code, substitute `claude` for `codex`. The server exposes:
 
-- `browse(goal, url, texts?, max_steps?)`: the complete Clef → native Safari loop.
+- `browse(goal, url, texts?, max_steps?, resume?)`: the complete Clef → native Safari
+  loop. The MCP connection retains Safari across calls; `resume:true` continues the
+  existing task tab after login or a step limit. The start URL's origin must match.
 - `usage()`: local daily budget usage without inference.
 - `account_usage()`: Cloudflare's account-wide neuron estimate plus the local budget,
   without inference. Requires Account Analytics Read; see [docs/credits.md](docs/credits.md).
@@ -238,7 +266,7 @@ uv run clef-browser run --url http://127.0.0.1:8765/fixture.html \
   --goal "Open the Agent guide and find the fixture version" --query "Agent guide"
 ```
 
-Validation: offline tests, types, lint, package build, and two real Safari integration
+Validation: offline tests, types, lint, package build, and three real Safari integration
 tests on Safari 27.0. OAuth linking, refresh, native Keychain storage, live Clef-flash
 inference, and a complete Clef-driven fixture task were also verified. See
 [the validation record](docs/VALIDATION.md) for observed limits. Run
@@ -249,15 +277,19 @@ browser benchmark or guarantee of task completion is claimed.
 
 Visible page text, labels, the goal and supplied input descriptions go to Cloudflare.
 Treat authenticated pages as data you are choosing to send there. Password fields
-are excluded from candidates, native `value=` attributes are redacted, and a fixed
+are excluded from candidates, native editable `value=` attributes are redacted (public
+select option values remain available), and a fixed
 local metadata check refuses credential/payment/file inputs. Redaction does not
 remove secrets already visible in page prose. The model cannot run arbitrary code.
 
 Confidence thresholds are guardrails, not proof of correctness. Dynamic pages,
-cross-origin frames, unlabeled fields, canvas interfaces, CAPTCHAs, logins and
+cross-origin frames, ambiguous unlabeled fields, canvas interfaces, CAPTCHAs, logins and
 unsupported widgets may require human input. The adapter refreshes before executing
 and stops on ambiguity; a site can still change during an individual native action.
 Use one Safari automation session at a time. Ordinary personal tabs are not used.
+File uploads, OS file pickers and slider values are not yet supported by the closed
+action adapter; these return a handoff instead of inventing an action. The Suno album
+art upload and complete 18-song workflow have not been verified.
 
 See [architecture](docs/architecture.md), [troubleshooting](docs/troubleshooting.md),
 [OAuth linking](docs/oauth.md), and [verified primary sources](docs/sources.md). MIT license.

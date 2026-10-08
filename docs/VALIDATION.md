@@ -86,3 +86,36 @@ conservative and includes probes, failed/uncertain inference and full-Clef escal
 Successful live account totals remain **pending Account Analytics Read permission
 and new OAuth consent**. Offline fixtures verify report behavior, not actual billing
 accuracy. No model inference or native browser action is needed for a credit check.
+
+## Form actions and persistent sessions — October 8, 2026
+
+- Version 0.2.0 installed locally with `uv sync --frozen`. 102 offline tests passed;
+  three native tests were skipped in that offline run.
+- All three live native tests passed: read/search/click, viewport scrolling, and a
+  rich editor with 4,800 characters, an unlabeled styles textarea and a dropdown.
+  Filling and selecting did not submit the form. The dropdown's page change handler
+  received the adapter's verified input/change notification.
+- Live Clef-flash chose all four actions in an ordered fixture workflow: rich lyrics,
+  styles, voice selection and a single Create click. The same native connection and
+  owned tab remained open across four Runner calls using resume. Native page evidence
+  confirmed 4,800 characters, `Styles entered: soul`, `Voice selected: Female`, and
+  `Submitted once`. Four requests reserved 144 neurons in the shared persistent ledger.
+- These stages used one-step limits and independently checked fixture evidence;
+  their returned status was `step_limit`, not model-declared `completed`. An earlier
+  combined goal stopped on low confidence before acting. An earlier lyrics-only
+  run filled correctly but rejected an insufficiently confident finish. This remains
+  a decision-quality limitation; thresholds were not lowered to force completion.
+- Session regressions cover retaining the native connection across human handoff,
+  rejecting resume without a session, cancelling before a pending
+  metadata-validated mutation, idle Ctrl-C shutdown, and malformed per-line JSON.
+  A regression restores whole-value redaction for quoted multiline values.
+- Independent review found four issues (late cancellation, blocked stdin shutdown,
+  malformed JSON types and multiline redaction). All were fixed and reviewed again;
+  the reviewer independently passed all 102 offline tests and found no remaining
+  critical or important blocker. Lint, format, Linux/Darwin types, package builds and
+  Gitleaks history checks passed.
+
+The existing Suno login session was left open during development. Its already
+running worker cannot load new Python code without restarting; authenticated Suno
+creation and album-art uploads remain unverified. File pickers/uploads and slider
+values are still handoff boundaries. No Suno songs were created by these fixture tests.

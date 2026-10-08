@@ -1,6 +1,10 @@
 # Architecture
 
-`cli.py` and `server.py` share `browse_task()` and `Runner` in `runner.py`.
+`cli.py` and `server.py` share `Runner` in `runner.py`. One-shot runs use `browse_task()`;
+MCP and CLI `session` use `session.py` to retain the same native connection. Its queue
+keeps SDK AnyIO scopes in one owning task across different MCP request tasks. Human
+handoffs leave the connection open. Concurrent tasks return busy. Cancellation stops
+before another browser action; an already dispatched native mutation is never replayed.
 `config.py` loads local settings; `budget.py` holds the persistent SQLite ledger.
 `clef.py` makes authenticated Workers AI requests and validates typed answers.
 `actions.py` extracts native nodes and builds a finite action set.
@@ -15,11 +19,18 @@ AI neuron aggregate for the current UTC day. CLI `credits` and MCP `account_usag
 combine that account-wide estimate with the separate local ledger, without inference.
 Permission failures and malformed/partial results return an unavailable account balance.
 
-The caller supplies a goal, HTTP(S) start URL and up to four exact input texts.
+The caller supplies a goal, HTTP(S) start URL and up to four exact input texts of up
+to 10,000 characters each. Full text values stay local: bounded previews, character
+counts and action IDs go to Clef. Exact strings are passed to native typing only.
 Runner opens a new automation tab, captures the visible viewport's native textTree into its own temporary
-file, and creates click/type choices from interactive UIDs. It adds fixed scroll,
+file, and creates click/type/select choices from interactive UIDs. It pins the
+returned `page-UUID` handle and reselects that owned tab before reads. Resume keeps
+the tab and requires the task URL's origin to match. It adds fixed and container scroll,
 wait, stop and finish choices. Input values are redacted from native extraction;
-sensitive fields are excluded. Candidate descriptions and page prose remain
+sensitive fields are excluded. Public option values are preserved because Safari
+may emit them without a separate label. An active dialog supplies the decision
+evidence and candidates; the full extraction still supplies the freshness fingerprint.
+Candidate descriptions and page prose remain
 untrusted evidence.
 
 One request asks Clef both a next-action choice and a goal-completion noul question.
@@ -32,8 +43,15 @@ browser benchmark results.
 
 Before execution the adapter extracts the page again and compares fingerprints,
 then uses native `page_interactions`. Typing also checks visible field metadata using
-a fixed local script; unlabeled, ambiguous, password, file and payment inputs are
-refused. The script reads metadata, never values. A model never supplies JavaScript.
+a fixed local script; ambiguous, password, file and payment inputs are refused.
+Rich text editors are included; an unlabeled textarea is accepted only when its
+visible metadata has a unique match. Typing never submits unless Clef chooses the
+separate search-and-Return candidate. Dropdown options must match native extraction
+and fixed local public-option metadata. Safari 27.0's `selectMenuItem` omits input/change
+events, so a fixed adapter script notifies the uniquely identified select after native
+selection. Only observed label metadata is substituted as JSON data, never executable
+model text or selectors. No script reads editable values, cookies or storage.
+A model never supplies JavaScript.
 An MCP tool error stops the action; it is not retried. Stale observations cause a new
 decision. An action repeated on identical state stops the loop.
 

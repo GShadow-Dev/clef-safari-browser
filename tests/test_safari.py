@@ -67,6 +67,36 @@ def test_input_metadata_blocks_credentials_and_ambiguous_fields():
             validate_input(node, {"fields": fields})
 
 
+async def test_snapshot_selects_only_the_tab_created_by_this_adapter(tmp_path, monkeypatch):
+    from clef_browser.safari import Safari
+
+    browser = Safari(tmp_path)
+    browser.temp_dir = str(tmp_path)
+    calls = []
+
+    async def call(name, arguments):
+        calls.append((name, arguments))
+        if name == "create_tab":
+            return {"handle": "page-65F2D53E-C04A-435A-A2B2-EAEBA4D2B670"}
+        if name == "get_page_content":
+            return {"content": "root\nbutton uid=7 'Ready'"}
+        if name == "page_info":
+            return {"url": "https://example.org", "title": "Ready"}
+        assert name == "switch_tab"
+        assert arguments == {"handle": "page-65F2D53E-C04A-435A-A2B2-EAEBA4D2B670"}
+        return {}
+
+    monkeypatch.setattr(browser, "call", call)
+    await browser.open("https://example.org")
+    await browser.snapshot()
+    assert [name for name, args in calls] == [
+        "create_tab",
+        "switch_tab",
+        "get_page_content",
+        "page_info",
+    ]
+
+
 @pytest.mark.safari
 @pytest.mark.skipif(os.environ.get("CLEF_TEST_SAFARI") != "1", reason="Opt-in native Safari test")
 async def test_native_safari_reads_types_and_clicks_real_page(tmp_path):
@@ -85,7 +115,7 @@ async def test_native_safari_reads_types_and_clicks_real_page(tmp_path):
             assert "Documentation directory" in before.text
             assert "never-read-this" not in before.text
             actions = candidates(before, ["Safari MCP"])
-            typing = next(a for a in actions.values() if a.kind == "type")
+            typing = next(a for a in actions.values() if a.kind == "type" and a.press_return)
             await browser.execute(typing, before)
             after = await browser.snapshot()
             assert "Results for: Safari MCP" in after.text
@@ -98,6 +128,56 @@ async def test_native_safari_reads_types_and_clicks_real_page(tmp_path):
             final = await browser.snapshot()
             assert final.url.endswith("/details.html")
             assert "fixture version is 1.0" in final.text
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.safari
+@pytest.mark.skipif(os.environ.get("CLEF_TEST_SAFARI") != "1", reason="Opt-in native Safari test")
+async def test_native_rich_lyrics_styles_and_dropdown_do_not_submit_form(tmp_path):
+    from clef_browser.actions import candidates
+    from clef_browser.safari import Safari
+
+    folder = Path(__file__).parent.parent / "examples"
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=str(folder))
+    )
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        async with Safari(tmp_path) as browser:
+            await browser.open(f"http://127.0.0.1:{server.server_port}/form.html")
+            before = await browser.snapshot()
+            lyrics = "Exact lyric line\n" * 300
+            actions = candidates(before, [lyrics])
+            rich = next(
+                a for a in actions.values() if a.kind == "type" and "Lyrics editor" in a.description
+            )
+            await browser.execute(rich, before)
+            after = await browser.snapshot()
+            assert "Lyrics chars: 4800" in after.text and "Old draft" not in after.text
+            assert "Not submitted" in after.text
+            styles = next(
+                a
+                for a in candidates(after, ["soul"]).values()
+                if a.kind == "type" and "textarea" in a.description
+            )
+            await browser.execute(styles, after)
+            after = await browser.snapshot()
+            assert "Styles entered: soul" in after.text
+            selection = next(
+                (
+                    a
+                    for a in candidates(after, []).values()
+                    if a.kind == "select" and a.value == "Female"
+                ),
+                None,
+            )
+            assert selection is not None, after.text
+            await browser.execute(selection, after)
+            after = await browser.snapshot()
+            assert "Voice selected: Female" in after.text
+            assert "Not submitted" in after.text
     finally:
         server.shutdown()
         server.server_close()

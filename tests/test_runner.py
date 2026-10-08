@@ -18,7 +18,7 @@ class Browser:
             self.current = self.snapshots.popleft()
         return self.current
 
-    async def execute(self, action, expected):
+    async def execute(self, action, expected, *, cancelled=None):
         if self.fail:
             error, self.fail = self.fail, None
             raise error
@@ -166,7 +166,7 @@ async def test_max_steps_and_unchanged_repeated_action_stop(tmp_path):
     [
         ("", "https://example.org/", []),
         ("x", "javascript:alert(1)", []),
-        ("x", "https://example.org/", ["x" * 1001]),
+        ("x", "https://example.org/", ["x" * 10001]),
     ],
 )
 def test_task_validation_refuses_invalid_inputs(goal, url, texts):

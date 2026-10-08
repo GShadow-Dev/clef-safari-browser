@@ -44,6 +44,14 @@ request saves a JSON extraction but returns a plain-text acknowledgment. On this
 build `evaluate_javascript` did not expand its advertised `$uid(N)` macro; the adapter
 avoids that macro. A real local fixture read/type/click test passed.
 
+Form adapter checked October 8, 2026 against the installed native catalog and live
+fixtures: `contentEditable uid=N role=textbox` and bare `uid=N role=button` occur in
+Suno; native selects emit `option value=Male` without a separate label. Native typing
+with `pressReturn:false` filled a 4,800-character rich editor without submitting.
+`selectMenuItem` changed selection but did not emit input/change; the fixed local
+event notification was verified with an onchange fixture. `create_tab` returned a
+`handle: page-UUID`, used with the catalog's `switch_tab(handle)` tool.
+
 Cloudflare credentials were absent at the initial release. The later OAuth update
 verified real linking, refresh and live Clef-flash inference on the development Mac.
 The dashboard's scope details showed Workers AI Read (`ai.read`), Workers AI Write

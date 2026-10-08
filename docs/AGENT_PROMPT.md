@@ -32,9 +32,18 @@ Use credits (or MCP account_usage) before and after tasks. Its account totals in
 other apps and may lag or use sampling; an unavailable balance is unknown. See
 docs/credits.md. Never treat the local ledger as account-wide remaining credits.
 
-For my browsing task, call uv run clef-browser run with --goal, --url, and explicit
+For a single browsing task, call uv run clef-browser run with --goal, --url, and explicit
 --query/--text values, or register the documented stdio MCP configuration and call
-browse(goal, url, texts, max_steps). Let Clef choose every action from native candidates.
+browse(goal, url, texts, max_steps, resume). For sign-in and multi-step form workflows,
+keep the MCP connection or clef-browser session process alive. Let me sign in in its
+automation tab; continue with resume=true using the same origin. Do not restart the
+driver or repeatedly invoke one-shot run after login. The process owns and pins its
+task tab. Supply up to four exact texts of up to 10,000 characters, and identify their
+purpose/index in the goal (for example text 0 is lyrics, text 1 is styles). Typing
+replaces without submitting; submission is a separate Clef-selected click. Active
+dialogs, rich text editors, nested scrolling and observed dropdown options are
+supported. File pickers, uploads and sliders currently need human handoff.
+Let Clef choose every action from native candidates.
 It cannot generate text: supply exact input strings derived from my request.
 
 Read the returned status, history and page evidence. Summarize findings with source

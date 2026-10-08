@@ -44,6 +44,18 @@ def test_native_input_values_are_excluded_from_sent_page_state():
     assert "Public text" in snapshot.text
 
 
+def test_multiline_editable_value_is_redacted_while_public_options_remain():
+    from clef_browser.actions import Snapshot
+
+    tree = (
+        "textarea uid=7 value='first secret line\nsecond secret line' label='Lyrics'\n"
+        "select uid=8\n\toption value=Male"
+    )
+    snapshot = Snapshot("https://example.org", "Form", tree)
+    assert "secret" not in snapshot.text
+    assert "option value=Male" in snapshot.text
+
+
 @pytest.mark.parametrize(
     "url",
     [

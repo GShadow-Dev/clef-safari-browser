@@ -23,15 +23,39 @@ from .actions import Action, Node, Snapshot, validate_url
 # Safari 27.0 advertises $uid(N) in evaluate_javascript, but this build does not
 # expand that macro (verified against the live server). Inspect only fixed field
 # metadata locally; execution still targets native UIDs through page_interactions.
-INPUT_METADATA = """return {fields: Array.from(document.querySelectorAll('input,textarea'))
-  .filter(e => e.getClientRects().length && !e.disabled)
-  .map(e => ({tag: e.tagName.toLowerCase(), type: e.type || '',
+INPUT_METADATA = """return {fields: Array.from(document.querySelectorAll(
+    'input,textarea,select,[contenteditable]'))
+  .filter(e => e.getClientRects().length && !e.disabled && !e.readOnly &&
+    (e.matches('input,textarea,select') || e.isContentEditable))
+  .map(e => ({tag: e.tagName.toLowerCase(),
+    type: e.isContentEditable ? 'contenteditable' :
+      (e.tagName === 'SELECT' ? 'select' : (e.type || '')),
+    options: e.tagName === 'SELECT' ? Array.from(e.options).filter(o => !o.disabled)
+      .map(o => o.label || o.textContent.trim()) : [],
     autocomplete: e.autocomplete || '', placeholder: e.getAttribute('placeholder') || '',
     label: e.getAttribute('aria-label') ||
       (e.getAttribute('aria-labelledby') || '').split(/\\s+/).map(id =>
         document.getElementById(id)?.textContent || '').join(' ').trim() ||
       Array.from(e.labels || []).map(l => l.textContent.trim()).join(' ')
   }))};"""
+
+# Safari 27.0 selectMenuItem changes selection without dispatching input/change.
+# Notify the one verified visible select after native execution. Only observed
+# label metadata is substituted as JSON data; no model code/selectors are accepted.
+SELECT_NOTIFY = """const fields = Array.from(document.querySelectorAll('select'))
+  .filter(e => e.getClientRects().length && !e.disabled)
+  .filter(e => {
+    const metadata = {placeholder: e.getAttribute('placeholder') || '',
+      label: e.getAttribute('aria-label') ||
+        (e.getAttribute('aria-labelledby') || '').split(/\\s+/).map(id =>
+          document.getElementById(id)?.textContent || '').join(' ').trim() ||
+        Array.from(e.labels || []).map(l => l.textContent.trim()).join(' ')};
+    return Object.entries(identifiers).every(([k,v]) => metadata[k] === v);
+  });
+if (fields.length !== 1) throw new Error('Select is missing or ambiguous');
+fields[0].dispatchEvent(new Event('input', {bubbles: true}));
+fields[0].dispatchEvent(new Event('change', {bubbles: true}));
+return {notified: true};"""
 
 
 class SafariError(RuntimeError):
@@ -42,12 +66,21 @@ class StaleSnapshot(SafariError):
     """The page changed after Clef made its decision."""
 
 
-def validate_input(node: Node, metadata: dict[str, Any]) -> None:
-    identifiers = dict(re.findall(r"\b(label|placeholder)='([^']*)'", node.description))
-    if not identifiers:
-        raise SafariError(
-            "Unlabeled input cannot be identified reliably; use a labeled search field."
+class CancelledAction(SafariError):
+    """A cancelled task must not dispatch another native mutation."""
+
+
+def field_identifiers(node: Node) -> dict[str, str]:
+    return {
+        m[1]: m[2] or m[3] or m[4]
+        for m in re.finditer(
+            r"""\b(label|placeholder)=(?:'([^']*)'|"([^"]*)"|(\S+))""", node.description
         )
+    }
+
+
+def matching_field(node: Node, metadata: dict[str, Any]) -> dict[str, Any]:
+    identifiers = field_identifiers(node)
     fields = metadata.get("fields")
     if not isinstance(fields, list):
         raise SafariError("Safari input metadata was unreadable.")
@@ -56,19 +89,28 @@ def validate_input(node: Node, metadata: dict[str, Any]) -> None:
         for item in fields
         if isinstance(item, dict)
         and all(item.get(key) == value for key, value in identifiers.items())
+        and (identifiers or item.get("type") == node.role)
     ]
     if len(matches) != 1:
         raise SafariError("The input is missing or ambiguous; fill it manually in Safari.")
-    field = matches[0]
-    if field.get("tag") not in {"input", "textarea"} or field.get("type") not in {
-        "text",
-        "search",
-        "email",
-        "url",
-        "tel",
-        "number",
-        "textarea",
-    }:
+    return matches[0]
+
+
+def validate_input(node: Node, metadata: dict[str, Any]) -> None:
+    field = matching_field(node, metadata)
+    if field.get("type") != "contenteditable" and (
+        field.get("tag") not in {"input", "textarea"}
+        or field.get("type")
+        not in {
+            "text",
+            "search",
+            "email",
+            "url",
+            "tel",
+            "number",
+            "textarea",
+        }
+    ):
         raise SafariError("This field cannot be filled by a browsing action.")
     if re.search(r"password|cc-|one-time-code", str(field.get("autocomplete", "")), re.IGNORECASE):
         raise SafariError("Enter credentials or payment information manually in Safari.")
@@ -102,6 +144,7 @@ class Safari:
         self.session: ClientSession | None = None
         self.lock_file: TextIO | None = None
         self.temp_dir: str = ""
+        self.tab_handle: str | None = None
 
     async def __aenter__(self) -> Safari:
         if sys.platform != "darwin":
@@ -154,6 +197,7 @@ class Safari:
                 "page_interactions",
                 "page_info",
                 "evaluate_javascript",
+                "switch_tab",
             }
             if not required <= {tool.name for tool in catalog.tools}:
                 raise SafariError(
@@ -184,9 +228,17 @@ class Safari:
         return native_data(result)
 
     async def open(self, url: str) -> None:
-        await self.call("create_tab", {"url": validate_url(url)})
+        data = await self.call("create_tab", {"url": validate_url(url)})
+        handle = data.get("handle")
+        if not isinstance(handle, str) or not re.fullmatch(r"page-[A-Fa-f0-9-]{36}", handle):
+            self.tab_handle = None
+            raise SafariError("Safari did not return a valid handle for the task tab.")
+        self.tab_handle = handle
 
     async def snapshot(self) -> Snapshot:
+        if self.tab_handle is None:
+            raise SafariError("Open a task tab before observing Safari.")
+        await self.call("switch_tab", {"handle": self.tab_handle})
         # Always use a path we created, never a server/page-provided arbitrary file path.
         target = Path(self.temp_dir) / "snapshot.txt"
         target.unlink(missing_ok=True)
@@ -198,6 +250,7 @@ class Safari:
                 "region": "viewport",
                 "includeURLs": True,
                 "includeAccessibilityAttributes": True,
+                "includeSelectOptions": True,
                 "maxWordsPerParagraph": 80,
                 "savePath": str(target),
             },
@@ -218,7 +271,9 @@ class Safari:
             raise SafariError("Safari returned no page text. The page may still be loading.")
         return Snapshot(str(info.get("url", "")), str(info.get("title", "")), text)
 
-    async def execute(self, action: Action, expected: Snapshot) -> None:
+    async def execute(
+        self, action: Action, expected: Snapshot, *, cancelled: asyncio.Event | None = None
+    ) -> None:
         fresh = await self.snapshot()
         if fresh.fingerprint != expected.fingerprint:
             raise StaleSnapshot("The page changed while Clef decided; observing again.")
@@ -226,9 +281,14 @@ class Safari:
             await asyncio.sleep(1)
             return
         interaction: dict[str, Any] = {"purpose": action.description, "type": action.kind}
+        notify_identifiers: dict[str, str] | None = None
         if action.kind == "scroll":
             interaction["scrollDelta"] = {"x": 0, "y": int(action.value)}
-        elif action.kind in {"click", "type"}:
+            if action.node is not None:
+                if not any(n.uid == action.node and n.role == "scrollable" for n in fresh.nodes):
+                    raise StaleSnapshot("The scroll container is no longer available.")
+                interaction["node"] = action.node
+        elif action.kind in {"click", "type", "select"}:
             node = next((n for n in fresh.nodes if n.uid == action.node), None)
             if node is None or node.sensitive or action.node is None or not action.node.isdigit():
                 raise StaleSnapshot(
@@ -238,8 +298,30 @@ class Safari:
                 # Metadata only: never read values, cookies, storage, or credential contents.
                 metadata = await self.call("evaluate_javascript", {"expression": INPUT_METADATA})
                 validate_input(node, metadata)
-                interaction.update(value=action.value, replaceAll=True, pressReturn=True)
+                interaction.update(
+                    value=action.value, replaceAll=True, pressReturn=action.press_return
+                )
+            elif action.kind == "select":
+                if action.value not in node.options:
+                    raise StaleSnapshot("The selected option is no longer offered.")
+                metadata = await self.call("evaluate_javascript", {"expression": INPUT_METADATA})
+                field = matching_field(node, metadata)
+                if field.get("tag") != "select" or action.value not in field.get("options", []):
+                    raise SafariError("The select option is missing or ambiguous.")
+                interaction.update(type="selectMenuItem", text=action.value)
+                notify_identifiers = field_identifiers(node)
             interaction.update(node=action.node, scrollToVisible=True)
         else:
             raise SafariError("Unsupported browser action.")
+        if cancelled and cancelled.is_set():
+            raise CancelledAction("Task cancelled before the native action.")
         await self.call("page_interactions", {"interactions": [interaction], "fullText": True})
+        if notify_identifiers is not None:
+            if cancelled and cancelled.is_set():
+                raise CancelledAction(
+                    "Task cancelled after selection; notification was not dispatched."
+                )
+            expression = (
+                "const identifiers = " + json.dumps(notify_identifiers) + ";\n" + SELECT_NOTIFY
+            )
+            await self.call("evaluate_javascript", {"expression": expression})

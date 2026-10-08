@@ -18,6 +18,35 @@ from .credits import credits_report
 from .oauth import OAuthConfig, OAuthError
 from .runner import Task, browse_task
 from .safari import Safari, SafariError
+from .session import BrowserSession
+
+
+async def interactive_session(settings: Settings) -> int:
+    """Read one task JSON per line, retaining Safari until stdin closes."""
+    reader = asyncio.StreamReader(limit=1048576)
+    transport, _ = await asyncio.get_running_loop().connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(reader), sys.stdin.buffer
+    )
+    try:
+        async with BrowserSession(settings) as session:
+            while line := await reader.readline():
+                try:
+                    data = json.loads(line)
+                    if not isinstance(data, dict):
+                        raise ValueError("Each line must be a task JSON object.")
+                    if data.get("command") == "exit":
+                        break
+                    result = await session.run(
+                        Task(data["goal"], data["url"], data.get("texts", [])),
+                        resume=data.get("resume", False),
+                        max_steps=data.get("max_steps"),
+                    )
+                except (ValueError, KeyError, TypeError) as exc:
+                    result = {"status": "error", "message": str(exc)}
+                print(json.dumps(result, ensure_ascii=False, allow_nan=False), flush=True)
+    finally:
+        transport.close()
+    return 0
 
 
 async def doctor(settings: Settings, url: str | None, cloudflare: bool) -> dict[str, Any]:
@@ -108,6 +137,9 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("budget", help="Show local allocation usage without network access.")
     commands.add_parser("credits", help="Check account-wide Cloudflare neurons and local budget.")
     commands.add_parser("serve", help="Expose browsing and usage tools over stdio MCP.")
+    commands.add_parser(
+        "session", help="Persistent Safari: one task JSON per stdin line; resume after login."
+    )
     auth = commands.add_parser(
         "login", help="Link a Cloudflare account using Safari and OAuth PKCE."
     )
@@ -156,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
 
             create_server(settings).run(transport="stdio")
             return 0
+        if args.command == "session":
+            return asyncio.run(interactive_session(settings))
         if args.command == "budget":
             emit(Budget(settings.state_dir / "usage.sqlite3", settings.daily_neurons).usage())
             return 0

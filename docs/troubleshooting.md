@@ -21,7 +21,9 @@
 | stalled | The same action was selected on unchanged state. Use a more direct URL or task. |
 | step_limit | Review returned evidence; provide a narrower task before extending the run. |
 | Repeated stale state | The page changes during inference. Let it settle, use a less dynamic page, or act manually. |
-| Unsupported or ambiguous input | Use a field with a unique label/placeholder. Complex forms and unlabeled controls are outside this version. |
+| Unsupported or ambiguous input | Use a unique label/placeholder. A unique unlabeled textarea is supported; file pickers, uploads, sliders and ambiguous controls require handoff. |
+| Sign-in disappears between tasks | Keep MCP or CLI session running and use resume=true after login. One-shot run ends its connection. Restarting a worker may require sign-in again. |
+| Form types submit unexpectedly | Pull the form-action update; ordinary typing no longer presses Return. Submission and search-and-Return are separate Clef choices. |
 
 For a clean native test run `CLEF_TEST_SAFARI=1 uv run pytest -m safari`. For a
 complete live AI test use the fixture demo in README.md after the Cloudflare probe.

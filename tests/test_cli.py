@@ -78,3 +78,54 @@ def test_login_missing_registration_explains_public_client_id(tmp_path, capsys, 
     monkeypatch.delenv("CLOUDFLARE_OAUTH_CLIENT_ID", raising=False)
     assert main(["login"]) == 1
     assert "CLOUDFLARE_OAUTH_CLIENT_ID" in json.loads(capsys.readouterr().out)["message"]
+
+
+@pytest.mark.skipif(__import__("sys").platform == "win32", reason="Native Safari uses POSIX")
+def test_idle_session_exits_on_sigint_without_waiting_for_stdin_eof(tmp_path):
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    child = subprocess.Popen(
+        [sys.executable, "-m", "clef_browser.cli", "session"],
+        cwd=tmp_path,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env={**os.environ, "CLEF_STATE_DIR": str(tmp_path)},
+    )
+    try:
+        time.sleep(0.7)
+        child.send_signal(signal.SIGINT)
+        assert child.wait(timeout=3) == 130
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.communicate(timeout=3)
+
+
+def test_malformed_session_json_returns_errors_and_keeps_reading(tmp_path):
+    import subprocess
+    import sys
+
+    lines = [
+        {"goal": 7, "url": "https://example.org"},
+        {"goal": "x", "url": "https://example.org", "texts": "abc"},
+        {"goal": "x", "url": "https://example.org", "resume": "false"},
+        {"goal": "x", "url": "https://example.org", "max_steps": True},
+        {"command": "exit"},
+    ]
+    result = subprocess.run(
+        [sys.executable, "-m", "clef_browser.cli", "session"],
+        cwd=tmp_path,
+        input="\n".join(json.dumps(line) for line in lines) + "\n",
+        text=True,
+        capture_output=True,
+        timeout=5,
+    )
+    assert result.returncode == 0, result.stderr
+    outputs = [json.loads(line) for line in result.stdout.splitlines()]
+    assert len(outputs) == 4
+    assert all(output["status"] == "error" for output in outputs)

@@ -24,6 +24,9 @@ before changing it. The project is a Python package, CLI and stdio MCP server.
 
 - Read docs/AGENT_PROMPT.md. Run doctor, check budget and credits, then invoke `clef-browser run`
   or the MCP `browse` tool with the person's actual goal, start URL and exact texts.
+  Use persistent MCP or CLI `session` across login/form handoffs; keep the process
+  alive and resume=true. Do not run another doctor/browser process while it owns
+  the lock. Pass text indices in the goal; exact strings can be up to 10,000 chars.
 - Obtain permission from the person for any external action their request did not
   authorize. Do not compose a purchase, message or submission yourself.
 - Prefer OAuth linking using docs/oauth.md and `clef-browser login`; the person handles
@@ -62,6 +65,9 @@ before changing it. The project is a Python package, CLI and stdio MCP server.
 - Execute native UIDs only after a freshness check. Never replay browser mutations
   after a timeout. Native metadata JavaScript is fixed code and must not read input
   values, cookies, storage or credentials.
+  The fixed dropdown notification script is an explicit form-action exception:
+  after a validated native selection it dispatches input/change on the uniquely
+  identified visible select, without reading values or accepting model code.
 - Safari 27.0 advertises `$uid(N)` in JavaScript but that macro failed in live testing.
   Do not restore it without a passing live test. The adapter uses fixed field metadata
   and native page_interactions UIDs instead. Native file-output acknowledgments are

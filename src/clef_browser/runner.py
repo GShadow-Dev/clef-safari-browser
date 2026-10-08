@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 from .actions import Action, Snapshot, candidates, validate_url
 from .auth import client_for
@@ -11,7 +13,7 @@ from .budget import MAX_REQUEST_BYTES, Budget, BudgetExceeded, encode_payload
 from .clef import ClefError, Decision
 from .config import Settings
 from .oauth import OAuthError
-from .safari import Safari, SafariError, StaleSnapshot
+from .safari import CancelledAction, Safari, SafariError, StaleSnapshot
 
 
 @dataclass(frozen=True)
@@ -21,11 +23,17 @@ class Task:
     texts: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.goal, str) or not isinstance(self.url, str):
+            raise ValueError("Goal and URL must be strings.")
+        if not isinstance(self.texts, list) or any(
+            not isinstance(text, str) for text in self.texts
+        ):
+            raise ValueError("Texts must be a list of exact strings.")
         if not self.goal.strip() or len(self.goal) > 2000:
             raise ValueError("Supply a nonempty goal of at most 2,000 characters.")
         validate_url(self.url)
-        if len(self.texts) > 4 or any(not text.strip() or len(text) > 1000 for text in self.texts):
-            raise ValueError("Supply at most four exact input texts of 1–1,000 characters each.")
+        if len(self.texts) > 4 or any(not text.strip() or len(text) > 10000 for text in self.texts):
+            raise ValueError("Supply at most four exact input texts of 1–10,000 characters each.")
 
     @property
     def inputs(self) -> list[str]:
@@ -35,7 +43,9 @@ class Task:
 class BrowserAPI(Protocol):
     async def open(self, url: str) -> None: ...
     async def snapshot(self) -> Snapshot: ...
-    async def execute(self, action: Action, expected: Snapshot) -> None: ...
+    async def execute(
+        self, action: Action, expected: Snapshot, *, cancelled: asyncio.Event | None = None
+    ) -> None: ...
 
 
 class DecisionAPI(Protocol):
@@ -50,7 +60,7 @@ def request_for(
     page_chars: int,
 ) -> tuple[dict[str, Any], dict[str, Action]]:
     offered = dict(actions)
-    text = snapshot.text[:page_chars]
+    text = snapshot.action_text[:page_chars]
     while True:
         payload = {
             "state": {
@@ -104,7 +114,9 @@ class Runner:
     ) -> None:
         self.browser, self.client, self.settings, self.budget = browser, client, settings, budget
 
-    async def run(self, task: Task) -> dict[str, Any]:
+    async def run(
+        self, task: Task, *, resume: bool = False, cancelled: asyncio.Event | None = None
+    ) -> dict[str, Any]:
         history: list[dict[str, Any]] = []
         pages: list[dict[str, str]] = []
         visited: list[str] = []
@@ -122,15 +134,29 @@ class Runner:
             }
 
         try:
-            await self.browser.open(task.url)
+            if cancelled and cancelled.is_set():
+                return finish("cancelled", "Task cancelled before browser execution.")
+            if resume:
+                current = await self.browser.snapshot()
+                expected_origin = urlsplit(task.url)
+                actual_origin = urlsplit(current.url)
+                if (actual_origin.scheme, actual_origin.netloc) != (
+                    expected_origin.scheme,
+                    expected_origin.netloc,
+                ):
+                    raise SafariError("Resume requires the same origin as the current task tab.")
+            else:
+                await self.browser.open(task.url)
             for step in range(1, self.settings.max_steps + 1):
+                if cancelled and cancelled.is_set():
+                    return finish("cancelled", "Task cancelled; no further action executed.")
                 snapshot = await self.browser.snapshot()
                 if snapshot.url not in visited:
                     visited.append(snapshot.url)
                 evidence = {
                     "url": snapshot.url,
                     "title": snapshot.title,
-                    "text": snapshot.text[:6000],
+                    "text": snapshot.action_text[:6000],
                 }
                 if not pages or pages[-1] != evidence:
                     pages.append(evidence)
@@ -139,12 +165,16 @@ class Runner:
                     task, snapshot, actions, history, self.settings.page_chars
                 )
                 decision = await self.client.decide(payload, self.settings.model)
+                if cancelled and cancelled.is_set():
+                    return finish("cancelled", "Task cancelled; no further action executed.")
                 if (
                     not decision.reliable
                     and self.settings.escalate
                     and self.settings.model == "clef-flash"
                 ):
                     decision = await self.client.decide(payload, "clef")
+                if cancelled and cancelled.is_set():
+                    return finish("cancelled", "Task cancelled; no further action executed.")
                 if not decision.reliable:
                     return finish(
                         "needs_input",
@@ -189,7 +219,10 @@ class Runner:
                     "probability": decision.probability,
                 }
                 try:
-                    await self.browser.execute(action, snapshot)
+                    await self.browser.execute(action, snapshot, cancelled=cancelled)
+                except CancelledAction as exc:
+                    history.append({**entry, "status": "cancelled"})
+                    return finish("cancelled", str(exc))
                 except StaleSnapshot:
                     history.append({**entry, "status": "stale"})
                     continue
@@ -199,7 +232,7 @@ class Runner:
             final = await self.browser.snapshot()
             if final.url not in visited:
                 visited.append(final.url)
-            pages.append({"url": final.url, "title": final.title, "text": final.text[:6000]})
+            pages.append({"url": final.url, "title": final.title, "text": final.action_text[:6000]})
             return finish(
                 "step_limit", "Maximum steps reached; inspect evidence or run a more specific task."
             )

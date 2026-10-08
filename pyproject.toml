@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clef-safari-browser"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cloudflare Clef decisions executed in native Safari on macOS"
 readme = "README.md"
 requires-python = ">=3.11"

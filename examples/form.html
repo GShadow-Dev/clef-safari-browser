@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Clef form fixture</title>
+<style>[contenteditable]{height:180px;overflow:auto;border:1px solid #aaa}textarea{display:block;height:80px}</style>
+<body>
+  <h1>Form fixture</h1>
+  <form onsubmit="event.preventDefault();document.getElementById('result').textContent='Submitted once';">
+    <div contenteditable="true" role="textbox" aria-label="Lyrics editor" oninput="document.getElementById('count').textContent='Lyrics chars: '+this.textContent.length">Old draft</div>
+    <p id="count">Lyrics chars: 9</p>
+    <textarea oninput="document.getElementById('style-status').textContent='Styles entered: '+this.value">Style suggestions</textarea>
+    <p id="style-status">Styles empty</p>
+    <label>Voice <select onchange="document.getElementById('voice-status').textContent='Voice selected: '+this.value">
+      <option>Male</option><option>Female</option>
+    </select></label>
+    <p id="voice-status">Voice selected: Male</p>
+    <button>Create</button>
+  </form>
+  <p id="result">Not submitted</p>
+</body></html>
