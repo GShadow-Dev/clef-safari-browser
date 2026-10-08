@@ -83,6 +83,7 @@ class ClefClient:
         budget: Budget,
         http: httpx.AsyncClient | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        get_token: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
         if not re.fullmatch(r"[0-9a-fA-F]{32}", account_id):
             raise ValueError("CLOUDFLARE_ACCOUNT_ID must be the 32-character account ID.")
@@ -90,6 +91,7 @@ class ClefClient:
             raise ValueError("Set a valid CLOUDFLARE_AUTH_TOKEN locally.")
         self.account_id, self.token, self.budget = account_id, token, budget
         self.http, self.sleep = http, sleep
+        self.get_token = get_token
 
     async def decide(self, payload: dict[str, Any], model: str = "clef-flash") -> Decision:
         if model not in RATES:
@@ -116,6 +118,9 @@ class ClefClient:
     ) -> Decision:
         url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run/@cf/cloudflare/{model}"
         for attempt in range(3):
+            token = await self.get_token() if self.get_token else self.token
+            if not token or any(ord(c) < 33 or ord(c) > 126 for c in token):
+                raise ClefError("Authentication returned an invalid token; log in again.")
             reservation = self.budget.reserve(model, body)
             retry_delay = float(2**attempt)
             try:
@@ -123,7 +128,7 @@ class ClefClient:
                     url,
                     content=encoded,
                     headers={
-                        "Authorization": f"Bearer {self.token}",
+                        "Authorization": f"Bearer {token}",
                         "Content-Type": "application/json",
                     },
                     timeout=30,

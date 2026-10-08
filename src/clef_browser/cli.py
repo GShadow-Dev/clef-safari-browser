@@ -10,20 +10,24 @@ from dataclasses import replace
 from typing import Any
 
 from . import __version__
+from .auth import auth_status, client_for, login, logout
 from .budget import RATES, Budget, BudgetExceeded
-from .clef import ClefClient, ClefError
+from .clef import ClefError
 from .config import Settings
+from .oauth import OAuthConfig, OAuthError
 from .runner import Task, browse_task
 from .safari import Safari, SafariError
 
 
 async def doctor(settings: Settings, url: str | None, cloudflare: bool) -> dict[str, Any]:
+    connection = auth_status(settings)
     report: dict[str, Any] = {
         "platform": sys.platform,
         "python": sys.version.split()[0],
         "driver": settings.driver,
         "model": settings.model,
-        "cloudflare_credentials_configured": bool(settings.account_id and settings.token),
+        "cloudflare_credentials_configured": connection["status"] in {"linked", "configured"},
+        "authentication": connection,
         "cloudflare_live_verified": False,
         "native_navigation_verified": False,
         "neurons_per_million_input_tokens": RATES[settings.model],
@@ -38,7 +42,8 @@ async def doctor(settings: Settings, url: str | None, cloudflare: bool) -> dict[
             )
     if cloudflare:
         budget = Budget(settings.state_dir / "usage.sqlite3", settings.daily_neurons)
-        result = await ClefClient(settings.account_id, settings.token, budget).decide(
+        client = await client_for(settings, budget)
+        result = await client.decide(
             {
                 "state": "This is a connectivity probe. No browser action should be executed.",
                 "questions": {
@@ -64,8 +69,8 @@ async def doctor(settings: Settings, url: str | None, cloudflare: bool) -> dict[
     report["status"] = "ready"
     if not report["cloudflare_credentials_configured"]:
         report["next_step"] = (
-            "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN locally, "
-            "then run doctor --cloudflare."
+            "Run clef-browser login to link Cloudflare, then doctor --cloudflare. "
+            "See docs/oauth.md for OAuth client registration."
         )
     return report
 
@@ -101,6 +106,19 @@ def parser() -> argparse.ArgumentParser:
     )
     commands.add_parser("budget", help="Show local allocation usage without network access.")
     commands.add_parser("serve", help="Expose browse and usage tools over stdio MCP.")
+    auth = commands.add_parser(
+        "login", help="Link a Cloudflare account using Safari and OAuth PKCE."
+    )
+    auth.add_argument("--client-id", help="Public OAuth client ID; never a client secret.")
+    auth.add_argument("--account-id", help="Account selected during Cloudflare consent.")
+    auth.add_argument(
+        "--scope", action="append", help="Registered Workers AI scope ID; repeat for each."
+    )
+    auth.add_argument("--port", type=int, help="Must match the registered loopback callback URL.")
+    commands.add_parser("auth-status", help="Show connection metadata without tokens or inference.")
+    commands.add_parser(
+        "logout", help="Revoke and remove this app's OAuth connection; retain budget."
+    )
     return cli
 
 
@@ -112,6 +130,25 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         settings = Settings.from_env(args.env_file)
+        if args.command == "auth-status":
+            emit(auth_status(settings))
+            return 0
+        if args.command == "login":
+            config = OAuthConfig(
+                args.client_id or settings.oauth_client_id,
+                args.account_id or settings.account_id,
+                tuple(args.scope or settings.oauth_scopes),
+                args.port if args.port is not None else settings.oauth_port,
+            )
+            print(
+                "Opening Cloudflare authorization in Safari. Review the account and permissions.",
+                file=sys.stderr,
+            )
+            emit(asyncio.run(login(settings, config)))
+            return 0
+        if args.command == "logout":
+            emit(asyncio.run(logout(settings)))
+            return 0
         if args.command == "serve":
             from .server import create_server
 
@@ -133,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         result = asyncio.run(browse_task(task, settings))
         emit(result)
         return 0 if result["status"] == "completed" else 1
-    except (ValueError, SafariError, ClefError, BudgetExceeded) as exc:
+    except (ValueError, SafariError, ClefError, BudgetExceeded, OAuthError) as exc:
         emit({"status": "error", "message": str(exc)})
         return 1
     except KeyboardInterrupt:

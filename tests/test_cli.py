@@ -1,5 +1,21 @@
 import json
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolated_cli_configuration(tmp_path, monkeypatch):
+    # Never import the developer's .env or trigger a real login in an offline test.
+    monkeypatch.chdir(tmp_path)
+    for name in (
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_AUTH_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_OAUTH_CLIENT_ID",
+        "CLOUDFLARE_OAUTH_SCOPES",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
 
 def test_missing_credentials_is_actionable_json_and_no_browser_launch(
     tmp_path, capsys, monkeypatch
@@ -43,3 +59,22 @@ async def test_mcp_server_exposes_shared_browse_and_usage_tools(tmp_path):
     tools = await server.list_tools()
     assert {tool.name for tool in tools} == {"browse", "usage"}
     assert "goal" in next(tool for tool in tools if tool.name == "browse").inputSchema["properties"]
+
+
+def test_auth_status_needs_no_safari_or_credentials(tmp_path, capsys, monkeypatch):
+    from clef_browser.cli import main
+
+    monkeypatch.setenv("CLEF_STATE_DIR", str(tmp_path))
+    monkeypatch.delenv("CLOUDFLARE_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("CLOUDFLARE_API_TOKEN", raising=False)
+    assert main(["auth-status"]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "unlinked"
+
+
+def test_login_missing_registration_explains_public_client_id(tmp_path, capsys, monkeypatch):
+    from clef_browser.cli import main
+
+    monkeypatch.setenv("CLEF_STATE_DIR", str(tmp_path))
+    monkeypatch.delenv("CLOUDFLARE_OAUTH_CLIENT_ID", raising=False)
+    assert main(["login"]) == 1
+    assert "CLOUDFLARE_OAUTH_CLIENT_ID" in json.loads(capsys.readouterr().out)["message"]

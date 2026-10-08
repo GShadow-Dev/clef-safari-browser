@@ -12,3 +12,6 @@ dist/
 *.sqlite*
 *.jsonl
 .DS_Store
+connection.json
+connection.json.tmp
+oauth.lock

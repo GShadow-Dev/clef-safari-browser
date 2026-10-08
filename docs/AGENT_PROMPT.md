@@ -15,10 +15,13 @@ and 'Allow remote automation and external agents' if necessary. Explain that App
 MCP operates an automation window inside native Safari, with no promise of my existing
 personal tabs, AutoFill or login sessions. Let me handle login, MFA and CAPTCHA.
 
-If Cloudflare credentials are missing, tell me how to create an account-scoped Workers
-AI token using Cloudflare's prefilled template (manual tokens need Read and Edit),
-and set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN locally in .env.
-Never ask me to paste a token into chat or expose it in output. Keep Workers Free as
+Link Cloudflare using OAuth: follow docs/oauth.md to register a private PKCE client
+with only Workers AI Read/Write permissions and refresh tokens. Configure its public
+Client ID, exact scope IDs and account ID, then run clef-browser login. Let me handle
+sign-in and consent in Safari. Tokens remain in this app's Keychain item; never
+inspect unrelated credential stores, ask for tokens in chat or expose them in output.
+The scoped API-token setup in README.md remains available for unattended environments.
+Keep Workers Free as
 the spending boundary and leave the shared persistent ledger intact.
 
 Run uv run clef-browser doctor, check uv run clef-browser budget, then verify native

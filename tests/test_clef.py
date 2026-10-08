@@ -65,6 +65,35 @@ async def test_exact_clef_api_contract_and_decision(tmp_path):
     assert budget.usage()["input_tokens"] == 300
 
 
+async def test_oauth_token_provider_is_used_for_each_inference_attempt(tmp_path):
+    from clef_browser.budget import Budget
+    from clef_browser.clef import ClefClient
+
+    tokens = iter(["fresh-first", "fresh-second"])
+    observed = []
+
+    async def get_token():
+        return next(tokens)
+
+    async def no_sleep(_):
+        pass
+
+    def transport(request):
+        observed.append(request.headers["Authorization"])
+        if len(observed) == 1:
+            return httpx.Response(503, json={"errors": [{"code": 3040}]})
+        return httpx.Response(200, json=response())
+
+    budget = Budget(tmp_path / "usage.sqlite")
+    async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as http:
+        decision = await ClefClient(
+            "a" * 32, "old-token", budget, http=http, sleep=no_sleep, get_token=get_token
+        ).decide(payload())
+    assert decision.choice == "click_7"
+    assert observed == ["Bearer fresh-first", "Bearer fresh-second"]
+    assert budget.usage()["requests"] == 2
+
+
 @pytest.mark.parametrize(
     "bad",
     [

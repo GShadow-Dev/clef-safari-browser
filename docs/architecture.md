@@ -5,6 +5,11 @@
 `clef.py` makes authenticated Workers AI requests and validates typed answers.
 `actions.py` extracts native nodes and builds a finite action set.
 `safari.py` connects to Apple's native server using the official Python MCP SDK.
+`oauth.py` implements Cloudflare PKCE and the loopback callback; `auth_store.py`
+owns one state-directory-scoped macOS Keychain item. `auth.py` links/revokes accounts
+and resolves credentials for both CLI and MCP, refreshing before inference attempts.
+Explicit API tokens take precedence. OAuth failures stop without executing a browser
+action; login/logout never clear the daily budget.
 
 The caller supplies a goal, HTTP(S) start URL and up to four exact input texts.
 Runner opens a new automation tab, captures the visible viewport's native textTree into its own temporary

@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from .budget import Budget, BudgetExceeded
 from .clef import ClefError
 from .config import Settings
+from .oauth import OAuthError
 from .runner import Task, browse_task
 from .safari import SafariError
 
@@ -34,7 +35,7 @@ def create_server(settings: Settings) -> FastMCP:
             task = Task(goal, url, texts or [])
             configured = replace(settings, max_steps=min(max_steps, settings.max_steps))
             return await browse_task(task, configured)
-        except (ValueError, SafariError, ClefError, BudgetExceeded) as exc:
+        except (ValueError, SafariError, ClefError, BudgetExceeded, OAuthError) as exc:
             return {"status": "error", "message": str(exc)}
 
     @server.tool()

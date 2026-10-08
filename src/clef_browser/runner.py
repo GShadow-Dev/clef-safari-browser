@@ -6,9 +6,11 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from .actions import Action, Snapshot, candidates, validate_url
+from .auth import client_for
 from .budget import MAX_REQUEST_BYTES, Budget, BudgetExceeded, encode_payload
-from .clef import ClefClient, ClefError, Decision
+from .clef import ClefError, Decision
 from .config import Settings
+from .oauth import OAuthError
 from .safari import Safari, SafariError, StaleSnapshot
 
 
@@ -203,12 +205,12 @@ class Runner:
             )
         except BudgetExceeded as exc:
             return finish("budget_exhausted", str(exc))
-        except (ClefError, SafariError, ValueError) as exc:
+        except (ClefError, SafariError, ValueError, OAuthError) as exc:
             return finish("error", str(exc))
 
 
 async def browse_task(task: Task, settings: Settings) -> dict[str, Any]:
     budget = Budget(settings.state_dir / "usage.sqlite3", settings.daily_neurons)
-    client = ClefClient(settings.account_id, settings.token, budget)
+    client = await client_for(settings, budget)
     async with Safari(settings.state_dir, settings.driver) as browser:
         return await Runner(browser, client, settings, budget).run(task)

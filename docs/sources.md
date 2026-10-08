@@ -15,6 +15,13 @@ Checked October 7, 2026. Review these on dependency, API or pricing changes.
   daily exhaustion 3036, temporary capacity 3040 and access errors.
 - [Workers AI REST setup](https://developers.cloudflare.com/workers-ai/get-started/rest-api/):
   account ID and scoped API token instructions.
+- [OAuth client registration](https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/):
+  public-client S256 PKCE, required scopes, private/public visibility and refresh grants.
+- [OAuth integration](https://developers.cloudflare.com/fundamentals/oauth/integrate-with-cloudflare/):
+  authorization, token and revocation endpoints. The live OpenID discovery document
+  also confirmed those endpoints and token authentication `none`.
+- [OAuth authorization management](https://developers.cloudflare.com/fundamentals/oauth/authorizing-an-application/):
+  account selection, consent and dashboard revocation.
 - [WebKit's Safari MCP announcement](https://webkit.org/blog/18136/introducing-the-safari-mcp-server-for-web-developers/):
   native server, prerequisites, tools and personal-data limitations.
 - [Official Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk):
@@ -28,6 +35,7 @@ request saves a JSON extraction but returns a plain-text acknowledgment. On this
 build `evaluate_javascript` did not expand its advertised `$uid(N)` macro; the adapter
 avoids that macro. A real local fixture read/type/click test passed.
 
-Cloudflare credentials were absent on the development Mac. The initial API tests
-use the documented schemas and a controlled HTTP transport. Live inference remains
-an explicit user setup check, not a claimed test result.
+Cloudflare credentials were absent at the initial release. The later OAuth update
+verified real linking, refresh and live Clef-flash inference on the development Mac.
+The dashboard's scope details showed Workers AI Read (`ai.read`), Workers AI Write
+(`ai.write`) and `offline_access`. See docs/VALIDATION.md for the actual tests.

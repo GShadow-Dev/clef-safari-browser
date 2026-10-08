@@ -5,7 +5,12 @@
 | MCP tools list, but opening a page times out | Enable Safari Settings → Developer → Allow remote automation and external agents. Re-run doctor with --url. |
 | Safari driver is missing or too old | Install Safari 27+; check /usr/bin/safaridriver --version. |
 | Another session is running | Finish the other Clef run. Use the same state directory. Do not kill unrelated processes. |
-| Credentials are missing | Use Cloudflare's Workers AI token template and set it locally with the account ID; run doctor --cloudflare. |
+| Credentials are missing | Follow docs/oauth.md and run login; then doctor --cloudflare. The scoped API-token alternative is in README.md. |
+| OAuth client form Continue is disabled | Press Return to add the callback URL to its list, and choose Code, Authorization Code/Refresh Token, and None (PKCE). |
+| OAuth callback port busy or timeout | Close the other login, retry, and use the exact registered callback URL. Sign in and consent in ordinary Safari. |
+| Keychain unavailable | Unlock your login keychain and allow this app's access. Never paste the saved credential into chat. |
+| OAuth refresh failed | Check the client's Refresh Token grant and offline_access scope; run login again. |
+| Configured and linked accounts differ | Run login for the intended account. Select the same account during consent. |
 | HTTP 401/403 | Check token scope, account ID and Workers Free model access. Do not upgrade automatically. |
 | Cloudflare code 3036 | The shared daily allocation is exhausted. Wait until the UTC reset and check other account usage. |
 | Temporary capacity failure | The client makes at most three budgeted inference attempts. Retry later if it still fails. |

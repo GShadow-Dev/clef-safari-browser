@@ -20,7 +20,7 @@ Cloudflare Browser Run and a deployed Worker are unnecessary.
 
 - macOS with **Safari 27+** and `/usr/bin/safaridriver --mcp`.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) for Python and dependencies.
-- A Cloudflare account on **Workers Free** and a Workers AI API token.
+- A Cloudflare account on **Workers Free**, linked through OAuth or a Workers AI API token.
 - Network access to Workers AI and the websites you request.
 
 Safari 27's native MCP server controls an **automation window inside Safari**.
@@ -41,6 +41,23 @@ Enable Safari → Settings → Advanced → **Show features for web developers**
 Then enable Settings → Developer → **Allow remote automation and external agents**.
 The project checks the driver; it does not change your Safari permissions.
 
+### Link your Cloudflare account with OAuth
+
+Register a private desktop OAuth client with PKCE using [docs/oauth.md](docs/oauth.md).
+Set its public Client ID, Workers AI scope IDs and your account ID in `.env`, then:
+
+```sh
+uv run clef-browser login
+uv run clef-browser auth-status
+```
+
+Safari opens Cloudflare's consent screen. Access and refresh tokens stay in this
+app's macOS Keychain entry. CLI and MCP automatically use the linked account and
+refresh expired tokens. `uv run clef-browser logout` revokes the connection and
+retains the usage ledger. No client secret or pasted API token is needed.
+
+### API token alternative
+
 Use Cloudflare's **Workers AI → Use REST API → Create a Workers AI API Token**
 template, scoped to your account, following
 [Cloudflare's REST setup](https://developers.cloudflare.com/workers-ai/get-started/rest-api/).
@@ -54,6 +71,9 @@ CLOUDFLARE_AUTH_TOKEN=your-workers-ai-token
 
 Credentials can also come from environment variables. They never enter model state.
 `.env`, the usage database, and run logs are excluded from Git. Keep your token local.
+An explicitly configured API token takes precedence over a saved OAuth connection.
+
+### Verify the connection
 
 ```sh
 uv run clef-browser doctor
@@ -207,11 +227,12 @@ uv run clef-browser run --url http://127.0.0.1:8765/fixture.html \
   --goal "Open the Agent guide and find the fixture version" --query "Agent guide"
 ```
 
-Validation at initial release: offline tests, types, lint and package build; a real
-Safari read/type/click test on Safari 27.0. **Live Clef inference was not verified
-on the development Mac because Cloudflare credentials were absent.** Run
-`doctor --cloudflare` and the fixture demo after setting yours. No general browser
-benchmark or guarantee of task completion is claimed.
+Validation: offline tests, types, lint, package build, and two real Safari integration
+tests on Safari 27.0. OAuth linking, refresh, native Keychain storage, live Clef-flash
+inference, and a complete Clef-driven fixture task were also verified. See
+[the validation record](docs/VALIDATION.md) for observed limits. Run
+`doctor --cloudflare` and the fixture demo after linking your own account. No general
+browser benchmark or guarantee of task completion is claimed.
 
 ## Limits and privacy
 
@@ -228,4 +249,4 @@ and stops on ambiguity; a site can still change during an individual native acti
 Use one Safari automation session at a time. Ordinary personal tabs are not used.
 
 See [architecture](docs/architecture.md), [troubleshooting](docs/troubleshooting.md),
-and [verified primary sources](docs/sources.md). MIT license.
+[OAuth linking](docs/oauth.md), and [verified primary sources](docs/sources.md). MIT license.

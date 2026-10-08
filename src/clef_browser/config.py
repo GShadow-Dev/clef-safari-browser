@@ -16,6 +16,9 @@ from .budget import RATES
 class Settings:
     account_id: str = ""
     token: str = field(default="", repr=False)
+    oauth_client_id: str = ""
+    oauth_scopes: tuple[str, ...] = ()
+    oauth_port: int = 8766
     state_dir: Path = field(
         default_factory=lambda: Path.home() / "Library/Application Support/clef-safari-browser"
     )
@@ -49,6 +52,9 @@ class Settings:
             token=os.environ.get(
                 "CLOUDFLARE_AUTH_TOKEN", os.environ.get("CLOUDFLARE_API_TOKEN", "")
             ),
+            oauth_client_id=os.environ.get("CLOUDFLARE_OAUTH_CLIENT_ID", ""),
+            oauth_scopes=tuple(os.environ.get("CLOUDFLARE_OAUTH_SCOPES", "").split()),
+            oauth_port=int(os.environ.get("CLOUDFLARE_OAUTH_PORT", "8766")),
             state_dir=Path(os.environ.get("CLEF_STATE_DIR", str(base.state_dir))).expanduser(),
             driver=os.environ.get("SAFARI_DRIVER", base.driver),
             model=os.environ.get("CLEF_MODEL", base.model),
