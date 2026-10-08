@@ -1,0 +1,28 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
+      - run: uv build
+      - name: Scan repository history for secrets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo gitleaks/gitleaks --pattern '*linux_x64.tar.gz' --dir /tmp/gitleaks-download
+          mkdir -p /tmp/gitleaks-bin
+          tar -xzf /tmp/gitleaks-download/*linux_x64.tar.gz -C /tmp/gitleaks-bin gitleaks
+          /tmp/gitleaks-bin/gitleaks detect --source . --no-banner

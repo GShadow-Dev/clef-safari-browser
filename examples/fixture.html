@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Clef Safari fixture</title>
+<body>
+  <h1>Documentation directory</h1>
+  <form id="search"><label for="query">Search documentation</label>
+    <input id="query" type="search" placeholder="Search docs">
+    <button>Search</button>
+  </form>
+  <p id="status">Enter a search above or open the guide.</p>
+  <a href="details.html">Agent guide</a>
+  <button onclick="document.getElementById('status').textContent='Updated without navigation'">Update page</button>
+  <label>Private password <input type="password" value="never-read-this"></label>
+  <script>
+    document.getElementById('search').addEventListener('submit', event => {
+      event.preventDefault();
+      document.getElementById('status').textContent = 'Results for: ' + document.getElementById('query').value;
+    });
+  </script>
+</body></html>

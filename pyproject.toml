@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "clef-safari-browser"
+version = "0.1.0"
+description = "Cloudflare Clef decisions executed in native Safari on macOS"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["httpx>=0.28,<1", "mcp>=1.20,<2", "python-dotenv>=1.1,<2"]
+
+[project.scripts]
+clef-browser = "clef_browser.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "ruff>=0.12,<1", "mypy>=1.17,<2", "build>=1.2,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clef_browser"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = ["safari: requires macOS, Safari 27+, and remote automation"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/clef_browser"]
