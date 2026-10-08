@@ -16,6 +16,7 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
+      - run: uv run mypy --platform darwin
       - run: uv run pytest
       - run: uv build
       - name: Scan repository history for secrets

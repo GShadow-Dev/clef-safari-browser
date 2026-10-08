@@ -53,6 +53,9 @@ spending boundary and monitor the account dashboard.
   without evidence; that live page contained no such link. Test goals must match
   available page content.
 - Ruff, formatting, Mypy across 12 source modules, and wheel/source builds passed.
+- An initial Linux CI type check could not infer the guarded native-library fields.
+  Explicit library type declarations fixed it; Linux and Darwin type checks both
+  passed locally. CI now checks both platform branches.
 - Independent review identified the Keychain CLI command-size limit, runtime access
   documentation and non-ASCII callback handling. All were fixed and reviewed again;
   no remaining release blocker was found.

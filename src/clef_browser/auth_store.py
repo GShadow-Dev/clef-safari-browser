@@ -23,6 +23,10 @@ class TokenStore(Protocol):
 class NativeKeychain:
     """Length-delimited native APIs; creator access follows the Python runtime identity."""
 
+    # Linux type checking cannot infer assignments beyond the macOS runtime guard.
+    security: ctypes.CDLL
+    core: ctypes.CDLL
+
     def __init__(self) -> None:
         if sys.platform != "darwin":
             raise OAuthError("OAuth login requires macOS Keychain.")

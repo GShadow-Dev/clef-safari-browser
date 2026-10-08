@@ -11,6 +11,8 @@ before changing it. The project is a Python package, CLI and stdio MCP server.
 1. Run `uv sync --frozen` from the repository root. uv manages Python and dependencies.
 2. Run `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`,
    `uv run mypy`, `uv build`, and `gitleaks detect --no-banner` before committing.
+   Check `uv run mypy --platform linux` and `uv run mypy --platform darwin` for native
+   platform branches; CI checks both without loading macOS libraries on Linux.
 3. For native integration, run `CLEF_TEST_SAFARI=1 uv run pytest -m safari` on macOS
    with Safari 27+ and remote automation enabled. Linux CI exercises offline boundaries.
 4. Verify live Cloudflare with `uv run clef-browser doctor --cloudflare` only when
